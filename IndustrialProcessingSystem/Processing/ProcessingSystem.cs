@@ -11,6 +11,7 @@ public class ProcessingSystem
     public event EventHandler<JobCompletedEventArgs>? JobCompleted;
     public event EventHandler<JobFailedEventArgs>? JobFailed;
     private readonly Dictionary<JobType, IJobProcessor> _processors;
+    public ReportGenerator? Reporter { get; set; }
 
     public ProcessingSystem(SystemConfig config)
     {
@@ -53,7 +54,7 @@ public class ProcessingSystem
 
         const int maxAttempts = 3;
         const int timeoutMs = 2000;
-
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
             try
@@ -65,17 +66,20 @@ public class ProcessingSystem
                     throw new TimeoutException($"Job {job.Id} timed out on attempt {attempt}.");
 
                 int result = await processTask;
-
+                stopwatch.Stop();
                 _handles[job.Id].SetResult(result);
                 OnJobCompleted(job, result);
+                Reporter?.RecordCompleted(job, result, stopwatch.Elapsed.TotalMilliseconds, failed: false);
                 return;
             }
             catch (Exception ex)
             {
                 if (attempt == maxAttempts)
                 {
+                    stopwatch.Stop();
                     _handles[job.Id].SetException(ex);
                     OnJobFailed(job, ex, aborted: true);
+                    Reporter?.RecordCompleted(job, -1, stopwatch.Elapsed.TotalMilliseconds, failed: true);
                 }
             }
         }

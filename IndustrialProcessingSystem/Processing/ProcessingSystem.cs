@@ -10,10 +10,16 @@ public class ProcessingSystem
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource<int>> _handles = new();
     public event EventHandler<JobCompletedEventArgs>? JobCompleted;
     public event EventHandler<JobFailedEventArgs>? JobFailed;
+    private readonly Dictionary<JobType, IJobProcessor> _processors;
 
     public ProcessingSystem(SystemConfig config)
     {
         _maxQueueSize = config.MaxQueueSize;
+        _processors = new Dictionary<JobType, IJobProcessor>
+        {
+            { JobType.Prime, new PrimeProcessor() },
+            { JobType.IO,    new IoProcessor()    }
+        };
     }
 
     public JobHandle? Submit(Job job)
@@ -35,6 +41,44 @@ public class ProcessingSystem
         _handles[job.Id] = tcs;
 
         return new JobHandle { Id = job.Id, Result = tcs.Task };
+    }
+
+    public async Task ProcessNextAsync()
+    {
+        if (!TryDequeue(out var job))
+        {
+            await Task.Delay(50);
+            return;
+        }
+
+        const int maxAttempts = 3;
+        const int timeoutMs = 2000;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                var processTask = _processors[job.Type].ProcessAsync(job);
+                var timeoutTask = Task.Delay(timeoutMs);
+
+                if (await Task.WhenAny(processTask, timeoutTask) == timeoutTask)
+                    throw new TimeoutException($"Job {job.Id} timed out on attempt {attempt}.");
+
+                int result = await processTask;
+
+                _handles[job.Id].SetResult(result);
+                OnJobCompleted(job, result);
+                return;
+            }
+            catch (Exception ex)
+            {
+                if (attempt == maxAttempts)
+                {
+                    _handles[job.Id].SetException(ex);
+                    OnJobFailed(job, ex, aborted: true);
+                }
+            }
+        }
     }
 
     private void OnJobCompleted(Job job, int result)

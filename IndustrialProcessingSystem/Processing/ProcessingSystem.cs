@@ -8,6 +8,8 @@ public class ProcessingSystem
     private readonly HashSet<Guid> _seenIds = new();
     private readonly ConcurrentDictionary<Guid, Job> _allJobs = new();
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource<int>> _handles = new();
+    public event EventHandler<JobCompletedEventArgs>? JobCompleted;
+    public event EventHandler<JobFailedEventArgs>? JobFailed;
 
     public ProcessingSystem(SystemConfig config)
     {
@@ -33,6 +35,25 @@ public class ProcessingSystem
         _handles[job.Id] = tcs;
 
         return new JobHandle { Id = job.Id, Result = tcs.Task };
+    }
+
+    private void OnJobCompleted(Job job, int result)
+    {
+        JobCompleted?.Invoke(this, new JobCompletedEventArgs
+        {
+            JobId = job.Id,
+            Result = result
+        });
+    }
+
+    private void OnJobFailed(Job job, Exception ex, bool aborted = true)
+    {
+        JobFailed?.Invoke(this, new JobFailedEventArgs
+        {
+            JobId = job.Id,
+            Exception = ex,
+            Aborted = aborted
+        });
     }
 
     private bool TryDequeue(out Job job)

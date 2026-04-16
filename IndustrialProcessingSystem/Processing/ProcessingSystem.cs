@@ -107,4 +107,22 @@ public class ProcessingSystem
             return _queue.TryDequeue(out job, out _);
         }
     }
+
+    public IEnumerable<Job> GetTopJobs(int n)
+    {
+        lock (_lock)
+        {
+            return _queue.UnorderedItems
+                .OrderBy(x => x.Priority)
+                .Take(n)
+                .Select(x => x.Element)
+                .ToList();
+        }
+    }
+
+    public Job? GetJob(Guid id)
+    {
+        _allJobs.TryGetValue(id, out var job);
+        return job;
+    }
 }

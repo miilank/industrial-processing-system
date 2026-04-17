@@ -12,6 +12,17 @@ foreach (var job in config.InitialJobs)
 
 pool.Start(); // workers start to take the jobs from the queue
 
+// get top jobs
+var topJobs = system.GetTopJobs(5);
+Console.WriteLine("Top 5 jobs:");
+foreach (var j in topJobs)
+    Console.WriteLine($"  [{j.Priority}] {j.Id} - {j.Type}");
+
+// get job
+var firstJob = config.InitialJobs[0];
+var found = system.GetJob(firstJob.Id);
+Console.WriteLine($"GetJob: {found?.Type} - {found?.Payload}");
+
 var cts = new CancellationTokenSource();
 reporter.StartPeriodicReporting(cts.Token); // same token means reporter is closed at the same time with producers
 

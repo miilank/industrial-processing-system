@@ -61,7 +61,7 @@ public class ReportGenerator
 
         var doc = new XDocument(
             new XElement("Report",
-                new XAttribute("GeneratedAt", data.GeneratedAt.ToString("o")),
+                new XAttribute("GeneratedAt", data.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss")),
                 new XElement("CompletedByType",
                     data.CompletedByType.Select(kv =>
                         new XElement("Entry",

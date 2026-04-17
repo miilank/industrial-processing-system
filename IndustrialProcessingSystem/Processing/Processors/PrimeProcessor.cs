@@ -7,17 +7,20 @@
         int threads = int.Parse(parts[1].Split(':')[1]);
         threads = Math.Clamp(threads, 1, 8);
 
-        int count = 0;
+        return Task.Run(() =>
+        {
+            int count = 0;
 
-        Parallel.For(2, limit + 1,
-            new ParallelOptions { MaxDegreeOfParallelism = threads },
-            i =>
-            {
-                if (IsPrime(i))
-                    Interlocked.Increment(ref count);
-            });
+            Parallel.For(2, limit + 1,
+                new ParallelOptions { MaxDegreeOfParallelism = threads },
+                i =>
+                {
+                    if (IsPrime(i))
+                        Interlocked.Increment(ref count);
+                });
 
-        return Task.FromResult(count);
+            return count;
+        });
     }
 
     private static bool IsPrime(int n)

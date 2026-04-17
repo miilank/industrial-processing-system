@@ -4,7 +4,10 @@
     public Task<int> ProcessAsync(Job job)
     {
         int delay = int.Parse(job.Payload.Split(':')[1].Replace("_", ""));
-        Thread.Sleep(delay);
-        return Task.FromResult(_rng.Next(0, 101));
+        return Task.Run(() =>
+        {
+            Thread.Sleep(delay);
+            return _rng.Next(0, 101);
+        });
     }
 }

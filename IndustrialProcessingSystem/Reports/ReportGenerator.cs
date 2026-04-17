@@ -81,7 +81,7 @@ public class ReportGenerator
         );
 
         await Task.Run(() => doc.Save(path));
-        Console.WriteLine($"[Report] Saved → {path}");
+        Console.WriteLine($"[Report] Saved: {path}");
     }
 
     public void StartPeriodicReporting(CancellationToken token)

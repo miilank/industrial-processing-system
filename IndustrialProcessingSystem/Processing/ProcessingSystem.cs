@@ -5,13 +5,19 @@ public class ProcessingSystem
     private readonly PriorityQueue<Job, int> _queue = new();
     private readonly object _lock = new();
     private readonly int _maxQueueSize;
+
     private readonly HashSet<Guid> _seenIds = new();
-    private readonly ConcurrentDictionary<Guid, Job> _allJobs = new();
-    private readonly ConcurrentDictionary<Guid, TaskCompletionSource<int>> _handles = new();
-    public event EventHandler<JobCompletedEventArgs>? JobCompleted;
+    private readonly ConcurrentDictionary<Guid, Job> _allJobs = new(); // exists just because of GetJob(id)
+    private readonly ConcurrentDictionary<Guid, TaskCompletionSource<int>> _handles = new(); // links producer and worker
+
+    // list of functions that should be called if something happens
+    // when logger does +=, function is added to the list
+    // when worker calls Invoke, he calls every function in the list
+    public event EventHandler<JobCompletedEventArgs>? JobCompleted; 
     public event EventHandler<JobFailedEventArgs>? JobFailed;
-    private readonly Dictionary<JobType, IJobProcessor> _processors;
+
     public ReportGenerator? Reporter { get; set; }
+    private readonly Dictionary<JobType, IJobProcessor> _processors;
 
     public ProcessingSystem(SystemConfig config)
     {
@@ -23,6 +29,7 @@ public class ProcessingSystem
         };
     }
 
+    // put the job in the queue and send promise to producer that the Result will be sent when worker gets the job done
     public JobHandle? Submit(Job job)
     {
         lock (_lock)
@@ -38,10 +45,14 @@ public class ProcessingSystem
             _queue.Enqueue(job, job.Priority);
         }
 
-        var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _handles[job.Id] = tcs;
+        // make the box for the result
+        // when you fill the box, don't wait for the producer, let him wake up on his own thread
+        // So worker and producer work independently, they don't block each other. 
+        var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously); // can set the result
+        _handles[job.Id] = tcs; // worker later finds this box(through handles) and puts the Result in it
 
-        return new JobHandle { Id = job.Id, Result = tcs.Task };
+        // tcs.Task is sent to producer so he can await the Result when worker fills the box
+        return new JobHandle { Id = job.Id, Result = tcs.Task }; // can read the result if someone calls SetResult
     }
 
     public async Task ProcessNextAsync()
@@ -63,19 +74,26 @@ public class ProcessingSystem
                 var timeoutTask = Task.Delay(timeoutMs);
 
                 if (await Task.WhenAny(processTask, timeoutTask) == timeoutTask)
+                    // wait for whatever Task finishes first, if timeout finishes first, the job took too long
                     throw new TimeoutException($"Job {job.Id} timed out on attempt {attempt}.");
 
                 int result = await processTask;
                 stopwatch.Stop();
-                _handles[job.Id].SetResult(result);
-                OnJobCompleted(job, result);
+                _handles[job.Id].SetResult(result); // fill the box, producer wakes up
+                OnJobCompleted(job, result); // trigger the event -> logger writes to the file
                 Reporter?.RecordCompleted(job, result, stopwatch.Elapsed.TotalMilliseconds, failed: false);
                 return;
             }
             catch (Exception ex)
             {
-                if (attempt == maxAttempts)
+                if (attempt < maxAttempts)
                 {
+                    // every failed attempt - FAILED
+                    OnJobFailed(job, ex, aborted: false);
+                }
+                else
+                {
+                    // third attempt - ABORT
                     stopwatch.Stop();
                     _handles[job.Id].SetException(ex);
                     OnJobFailed(job, ex, aborted: true);
@@ -85,9 +103,14 @@ public class ProcessingSystem
         }
     }
 
+    /*
+        Logger subscribed and runs on worker threads, it fills the list of functions via += in Subscribe, 
+        when Invoke is called all functions added with += are called, and then the lambda executes which writes 
+        to the file — one at a time, controlled by the semaphore.
+     */
     private void OnJobCompleted(Job job, int result)
     {
-        JobCompleted?.Invoke(this, new JobCompletedEventArgs
+        JobCompleted?.Invoke(this, new JobCompletedEventArgs // Invoke calls every lambda that is added by +=
         {
             JobId = job.Id,
             Result = result

@@ -2,7 +2,7 @@
 {
     private readonly ProcessingSystem _system;
     private readonly int _workerCount;
-    private readonly CancellationTokenSource _cts = new();
+    private readonly CancellationTokenSource _cts = new(); // can cancel
 
     public WorkerPool(ProcessingSystem system, int workerCount)
     {
@@ -14,11 +14,11 @@
     {
         for (int i = 0; i < _workerCount; i++)
         {
-            Task.Run(() => WorkerLoop(_cts.Token));
+            Task.Run(() => WorkerLoop(_cts.Token)); // pool works on its threads like producers on theirs
         }
     }
 
-    private async Task WorkerLoop(CancellationToken token)
+    private async Task WorkerLoop(CancellationToken token) // listenes if cancelled
     {
         while (!token.IsCancellationRequested)
         {

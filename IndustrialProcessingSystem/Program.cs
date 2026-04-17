@@ -10,16 +10,16 @@ logger.Subscribe(system);
 foreach (var job in config.InitialJobs)
     system.Submit(job);
 
-pool.Start();
+pool.Start(); // workers start to take the jobs from the queue
 
 var cts = new CancellationTokenSource();
-reporter.StartPeriodicReporting(cts.Token);
+reporter.StartPeriodicReporting(cts.Token); // same token means reporter is closed at the same time with producers
 
 var random = new Random();
 var jobTypes = new[] { JobType.Prime, JobType.IO };
 
 var producers = Enumerable.Range(0, config.WorkerCount)
-    .Select(_ => Task.Run(() =>
+    .Select(_ => Task.Run(() => // Task.run starts the while loop on special threads(we have n producer threads)
     {
         while (!cts.Token.IsCancellationRequested)
         {
@@ -55,7 +55,7 @@ var producers = Enumerable.Range(0, config.WorkerCount)
 
 Console.WriteLine($"System running - {config.WorkerCount} workers, max queue {config.MaxQueueSize}.");
 Console.WriteLine("Press Enter to stop.");
-Console.ReadLine();
+Console.ReadLine(); // program stays here until someone presses Enter while producer threads continue their work
 
 cts.Cancel();
 pool.Stop();

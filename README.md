@@ -14,7 +14,7 @@ IO jobs simulate a read operation by sleeping for a given number of milliseconds
 
 Producer threads submit jobs to a thread-safe priority queue. Lower priority number means higher priority. Jobs are rejected if the queue is full or if the same ID has already been submitted.
 
-Worker threads pull jobs from the queue and process them with a 2 second timeout. Failed jobs are retried up to 3 times. After the third failure the job is aborted.
+Worker threads pull jobs from the queue and process them with a 2 second timeout. Each job is attempted up to 3 times total. If all attempts fail the job is aborted.
 
 Results are delivered through a TaskCompletionSource. The caller gets a JobHandle with a Task that resolves when the job finishes. Completed and failed jobs are logged asynchronously to events.log.
 

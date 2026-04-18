@@ -1,6 +1,6 @@
 ## Industrial Processing System
 
-A thread-safe industrial job processing service with a priority queue, async execution, and event-driven architecture.
+A thread-safe producer-consumer job processing system with a priority queue, async execution, and event-driven architecture.
 
 The system loads its configuration from SystemConfig.xml which defines the number of worker threads, the maximum queue size, and an initial set of jobs. After startup, producer threads continuously generate and submit new jobs on their own.
 

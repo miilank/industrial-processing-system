@@ -10,15 +10,16 @@
         return Task.Run(() =>
         {
             int count = 0;
-
-            Parallel.For(2, limit + 1,
+            Parallel.For(
+                2, limit + 1,
                 new ParallelOptions { MaxDegreeOfParallelism = threads },
-                i =>
-                {
-                    if (IsPrime(i))
-                        Interlocked.Increment(ref count);
-                });
-
+                () => 0,
+                (i, state, localCount) => {
+                    if (IsPrime(i)) localCount++;
+                    return localCount;
+                },
+                localCount => Interlocked.Add(ref count, localCount)
+            );
             return count;
         });
     }
